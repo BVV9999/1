@@ -1,0 +1,25 @@
+#include<stdio.h>
+main()
+{
+ int a,b=1;
+ printf("----------------\n");
+ printf("  1--素数判断\n");
+ printf("  2--素数判断\n");
+ printf("  3--素数判断\n");
+ printf("  4--素数判断\n");
+ printf("  0--退出程序\n");
+ printf("----------------\n\n");
+ do
+ {
+  printf("请输入选项：");
+  scanf("%d",&a);
+  switch(a)
+   { case 1:printf("1111111\n");break;
+     case 2:printf("2222222\n");break;
+     case 3:printf("3333333\n");break;
+     case 4:printf("4444444\n");break;
+     case 0: b=0;break;
+    }
+ }
+ while(b!=0);
+}  
