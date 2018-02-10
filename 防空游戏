@@ -1,0 +1,700 @@
+#include "acllib.h"
+#include <stdio.h> 
+#include <math.h>
+#include <time.h>
+
+
+#define gamex 1200
+#define gamey 700
+#define PI 3.14159265358979323846 
+
+int HP=100;           //生命值 
+int xx=215,yy=605;    //炮管头位置 
+int pMoving=0,M_up=0,shooting=0; //状态类 
+int paoNum=0;		  //炮弹总数 
+int rad=0;            //炮角度 
+int tag1=0,tag2=0;    //标记  1:准线-虚  2：蓄力 
+int load=0;           //炮管热值 
+int boatNum=0;		  //炮台总数
+int bombNum=0;        //炸弹总数 
+int score=0;
+int restart=0;
+double val=PI/180;
+
+typedef struct {
+	int p_rad;
+	double center_x,center_y;
+	double speed_x,speed_y;
+	int lv;
+	int HP; 
+}paodan;
+
+typedef struct {
+	int b_rad;
+	int center_x,center_y;
+	int speed_x;
+	int lv;
+	int HP; 
+}boat;
+
+typedef struct {
+	double center_x,center_y;
+	double speed_x,speed_y;
+	int size;
+	int HP;
+}bomb;
+
+typedef struct {
+	int x,y;
+	int HP;
+	int tag;
+}BOOM;
+
+bomb t[2]={0};
+bomb td[3]={0};
+paodan a[10]={0};
+boat s[5]={0};
+BOOM c[10]={0};
+
+void Judge();
+void Draw();
+void drawboat(boat* s);
+void Drawpao(int x,int y);
+void drawBOOM(int x,int y);
+void shoot(int x,int y);
+void timerListener(int id); 
+void mouseListener(int x,int y,int button,int event);
+void keyListener(int key,int event);
+int search(paodan* a);
+int searchboat(boat* s);
+int searchbomb(bomb* t);
+int searchBOOM(BOOM* c);
+
+
+int Setup()
+{
+	start:
+	initWindow("游戏",DEFAULT,DEFAULT,gamex+1,gamey+1);	
+//	initConsole();
+
+	srand((int)time(NULL));
+	beginPaint();
+	Draw();
+
+	endPaint();
+	
+	int bgm=0;
+	char song[]="111.mp3";
+
+	loadSound(song,&bgm);
+	playSound(bgm,1);
+
+	registerTimerEvent(timerListener);	
+	registerMouseEvent(mouseListener);	
+	registerKeyboardEvent(keyListener);
+	startTimer(0,15);
+	startTimer(3,15);
+	startTimer(6,100);
+	startTimer(7,1000);
+	
+	
+	return 0;
+ } 
+ 
+void mouseListener(int x,int y,int button,int event)
+{
+	switch (event)	{
+		case 0: shooting=1;
+				if(!M_up) {
+				M_up=1;
+				startTimer(4,100);
+				}
+				break;
+	
+		case 2:	M_up=0;
+				shoot(xx,yy);
+				if(tag2==2){
+					rad+=4;shoot(xx,yy);
+					rad-=8;shoot(xx,yy);
+					rad+=12;shoot(xx,yy);
+					rad-=16;shoot(xx,yy);
+					rad+=8;
+					load-=10;
+				}
+				startTimer(5,200);
+				break;
+	}
+//	printf("%d %d\n",button,event);
+ } 
+ 
+void keyListener(int key,int event)
+{
+	if(event==0)
+		switch (key){
+			case 0x41: 
+			case 0x57:  if(rad<=85&&rad>=0&&!pMoving)	
+							startTimer(1,15);break;
+			case 0x44: 
+			case 0x53:  if(rad<=90&&rad>=5&&!pMoving)
+							startTimer(2,15);break;
+	}
+
+ } 
+ 
+void timerListener(int id)
+{
+	static int cnt=0;
+	switch (id)
+	{
+		case 0: beginPaint();
+				clearDevice();
+				Draw();
+				Judge();
+
+				endPaint();break;
+		case 1: //炮管上移 
+				if(cnt!=5&&rad<=89&&rad>=0){
+					cnt++;rad+=2;pMoving=1;
+					xx=115+(int)(100*cos(rad*val));
+					yy=605-(int)(100*sin(rad*val));
+				}
+				else{
+					cnt=0;pMoving=0;
+					cancelTimer(1); 
+				}
+				break;	
+		case 2: //炮管下移 
+				if(cnt!=5&&rad<=90&&rad>=1){
+					cnt++;rad-=2;pMoving=1;
+					xx=115+(int)(100*cos(rad*val));
+					yy=605-(int)(100*sin(rad*val));
+				}
+				else{
+					cnt=0;pMoving=0;
+					cancelTimer(2); 
+				}
+				break;	
+		case 3: //运动 
+				{
+					//炮弹运动 
+					int i;
+					for(i=0;i<10;i++){
+						a[i].center_x+=a[i].speed_x;
+						a[i].center_y-=a[i].speed_y;
+						if(a[i].center_y<10||a[i].center_x>1190){
+							a[i].HP=0;paoNum--;
+						}
+					}
+					//飞艇运动 
+					int j;
+					for(j=0;j<5;j++){
+						if(s[j].HP>0) {
+							s[j].center_x-=s[j].speed_x;
+							if(s[j].center_x<=0) {
+								s[j].HP=0;boatNum--;HP-=2;
+							} 
+						}
+					}
+					//空降物 
+					int k;
+					for(k=0;k<2;k++){
+						if(t[k].HP>0){
+							t[k].center_x-=t[k].speed_x;
+							t[k].center_y+=t[k].speed_y;
+							if(t[k].center_x<0){
+								t[k].HP=0;bombNum--;
+							}
+							if(t[k].center_y>=640||((t[k].center_x-115)*(t[k].center_x-115)+
+								(t[k].center_y-625)*(t[k].center_y-625)<50*50)){
+								t[k].HP=0;bombNum--;
+								int l=searchbomb(td);
+									if(l!=-1){
+										td[l].center_x=t[k].center_x;
+										td[l].center_y=t[k].center_y;
+										td[l].HP=100;
+										
+								}	
+								
+							}
+						}
+					
+					
+					}
+				}break;	
+		case 4://辅助线
+			{
+				static int cnt4=0;
+				if(!pMoving) cnt4++;
+				else cnt4=0;
+			//	printf("%d\n",cnt4);
+				if(M_up==0) {
+					cancelTimer(4);
+					cnt4=0;
+					tag1=0;tag2=0;
+					pMoving=0;
+					}
+				if(cnt4>=2)	tag1=1;
+				if(cnt4>=5&&cnt4<8) tag2=1;
+				else if(cnt4>=8) tag2=2;
+			
+			}break;
+		case 5:	//瞄准 
+			{
+				static int cnt5=0;
+				
+				if(cnt5>=5){
+					shooting=0;
+					cnt5=0;
+					cancelTimer(5);
+				}
+				cnt5++;	
+			//	printf("5_%d s_%d\n",cnt5,shooting);		
+			}break;	
+		case 6://蓄力 
+			{
+				static int cnt6=0;
+				if(shooting==0) cnt6++;
+				else cnt6=0;
+				if(cnt6>=15&&load>0) load-=5;
+				if(load<0) load=0;
+				
+			//	printf("6_%d s_%d\n",cnt6,shooting);
+			}break;	
+		case 7://初始化炮艇 
+			{
+				int k=searchboat(s);
+		 		if(k!=-1&&boatNum<5&&rand()%5>=1){
+ 					s[k].HP=1;
+ 					s[k].center_x=1200;
+ 					s[k].center_y=rand()%250+50;
+ 					s[k].b_rad=30;
+ 					s[k].speed_x=2+(rand()%2);
+ 					if(s[k].speed_x%2) s[k].lv=2;
+ 					else s[k].lv=1;
+ 					if(rand()%30==0){
+ 						s[k].lv=3;
+						s[k].HP=5;
+						s[k].speed_x=2;	
+					}
+				}
+				//初始化空投物 
+				int b;
+				for(b=0;b<5;b++){
+					if(s[b].HP!=0&&rand()%5==0&&s[b].center_x>600&&s[b].lv==1){
+						int r=searchbomb(t);
+						if(r!=-1){
+							t[r].HP=1;
+							t[r].center_x=s[b].center_x+8;
+							t[r].center_y=s[b].center_y+s[b].b_rad-10;
+							t[r].size=1;
+							t[r].speed_x=s[b].speed_x;
+							t[r].speed_y=s[b].lv;
+							bombNum++;
+						}
+					}
+				}
+				
+
+			}break;	
+			
+	}
+	
+}
+
+//炮弹初始化 
+void shoot(int x,int y)
+{
+	int pao;
+	pao=search(a);
+	if(pao!=-1&&load<120){
+		a[pao].center_x=(double)x;
+		a[pao].center_y=(double)y;
+		if(tag2==2) a[pao].lv=2;
+		else a[pao].lv=1;
+		a[pao].HP=1;
+		a[pao].p_rad=rad;
+		a[pao].speed_x=8.0*cos(rad*val);
+		a[pao].speed_y=8.0*sin(rad*val);
+		
+		
+		paoNum++;
+		load+=2*a[pao].lv; 
+	}
+
+}
+
+//搜寻可用炮弹 
+int search(paodan *a)
+{
+	int ret=-1;
+ 	int i;
+ 	for(i=0;i<10;i++){
+ 		if(a[i].HP==0){
+ 			ret=i;break;
+		 }
+	 }
+	return ret; 
+}
+
+//搜寻可用飞艇 
+int searchboat(boat* s)
+{
+ 	int ret=-1;
+ 	int i;
+ 	for(i=0;i<5;i++){
+ 		if(s[i].HP==0){
+ 			ret=i;break;
+		 }
+	 }
+	return ret; 
+}	
+
+//搜寻可用空投物 
+int searchbomb(bomb* t)
+{
+	int ret=-1;
+ 	int i;
+ 	for(i=0;i<3;i++){
+ 		if(t[i].HP==0){
+ 			ret=i;break;
+		 }
+	 }
+	return ret; 
+}
+
+//搜寻可用爆炸 
+int searchBOOM(BOOM* c)
+{
+	int ret=-1;
+ 	int i;
+ 	for(i=0;i<10;i++){
+ 		if(c[i].HP==0){
+ 			ret=i;break;
+		 }
+	 }
+	return ret; 
+}
+
+void Draw()
+{
+	//绘制界面 
+	setPenColor(BLACK);
+	setPenWidth(4);
+	setPenStyle(PEN_STYLE_DASH);
+	setBrushColor(RGB(253,245,230));
+	setBrushStyle(BRUSH_STYLE_DIAGCROSS);
+	rectangle(1,1,gamex,gamey);
+	setPenWidth(3);
+	line(1,gamey-50,gamex,gamey-50);
+	line(300,gamey-50,300,gamey);
+	setPenColor(BLACK);
+	setPenWidth(2);
+	setPenStyle(PEN_STYLE_SOLID);
+	setBrushColor(RGB(200,200,200));
+	setBrushStyle(BRUSH_STYLE_BDIAGONAL);
+	roundrect(350,660,1150,690,20,20);
+
+	//绘制负载 
+	if (load>120) load=120;
+	setPenColor(RGB(30,30,30));
+	setPenWidth(2);
+	setBrushColor(EMPTY);
+	setPenStyle(PEN_STYLE_SOLID);
+	roundrect(30,660,260,690,10,10);
+	setPenWidth(2);
+	roundrect(259,667,265,684,2,2);
+	setPenColor(EMPTY);
+	setBrushStyle(BRUSH_STYLE_SOLID);
+	if(load<=40) setBrushColor(RGB(	0,255,255));
+	else if(load<=80) setBrushColor(RGB(0,255,127));
+	else if(load<120) setBrushColor(RGB(255,140,0));
+	else if(load==120) setBrushColor(RED);
+	int cnt,f=load+5; 
+	for(cnt=0;1;cnt++){
+		f-=5;
+		if(f<=0) break; 
+		roundrect(36+9*cnt,665,45+9*cnt,685,2,2);
+	}
+	
+	
+	//绘制血条与得分 
+	setTextColor(RED); 
+ 	setTextSize(30); 
+ 	char text1[]="HP";
+ 	paintText(310,660,text1); 
+ 	setPenColor(BLACK);
+	setPenWidth(2);
+	setBrushColor(RGB(225,225,225));
+	setBrushStyle(BRUSH_STYLE_SOLID);
+	roundrect(350,660,1150,690,20,20);	
+	setBrushColor(RGB(10,210,30));
+	setBrushStyle(BRUSH_STYLE_SOLID);
+	if(HP>=0)roundrect(350,660,350+8*HP,690,20,20);
+	setTextColor(RGB(80,80,80)); 
+ 	setTextSize(20); 
+ 	char text2[20];
+ 	if(HP>=0)sprintf(text2,"%d%%",HP);
+ 	else sprintf(text2,"game over!");
+ 	setTextBkColor(EMPTY);
+ 	paintText(700,665,text2);
+ 	char text4[20];
+ 	setTextColor(RGB(255,69,0)); 
+ 	setTextSize(30); 
+	sprintf(text4,"得分：%d",score);
+ 	paintText(960,615,text4);
+	
+	//绘制炮身 
+	int paox=50,paoy=300;
+	setPenColor(RGB(100,100,100));
+	setPenWidth(1);
+	setPenStyle(BRUSH_STYLE_SOLID);
+	setBrushColor(RGB(65,65,65));
+	rectangle(30,645,200,649); 
+	rectangle(100,644,130,645);
+	setBrushColor(RGB(80,80,80));
+	roundrect(60,615,170,644,10,10);
+	setPenColor(RGB(100,100,100));
+	setPenStyle(PEN_STYLE_SOLID);
+	setBrushColor(RGB(80,80,80));
+	pie(90, 590, 140, 640, 140 , 615, 90, 615); 
+	
+	//炮管相关 
+	Drawpao(xx,yy);
+	
+	//绘制炮弹
+	if(paoNum){
+		
+		setPenWidth(10);
+		setBrushColor(MAGENTA);
+		setPenStyle(BRUSH_STYLE_SOLID);
+		int i=0;
+		for(i=0;i<10;i++){
+			if(a[i].HP!=0){
+				int lv=a[i].lv;
+			int cx=(int)a[i].center_x,cy=(int)a[i].center_y;
+			int sx=(int)a[i].speed_x,sy=(int)a[i].speed_y;			
+			setPenColor(YELLOW);
+			ellipse(cx-2-sx,cy-2+sy,cx+2-sx,cy+2+sy);
+			setPenColor(RGB(210,0,0));
+			ellipse(cx-3*lv,cy-3*lv,cx+3*lv,cy+3*lv);
+			}
+			
+		}
+	}
+	
+	//飞艇 
+	drawboat(s);
+	
+	//空投炸弹 
+	setPenWidth(3);
+	setPenColor(BLACK);
+	setPenStyle(PEN_STYLE_SOLID);
+	setBrushColor(BLACK);
+	setBrushStyle(BRUSH_STYLE_DIAGCROSS);
+	int j;
+	for(j=0;j<2;j++){
+		if(t[j].HP!=0){
+			rectangle(t[j].center_x-10,t[j].center_y-10,
+					t[j].center_x+10,t[j].center_y+10);
+		}
+	} 
+	for(j=0;j<3;j++){
+		if(td[j].HP!=0){
+			rectangle(td[j].center_x-10,td[j].center_y-10,
+					td[j].center_x+10,td[j].center_y+10);
+			td[j].HP--;
+			if(td[j].HP==0)	{
+				int n=searchBOOM(c);
+				if(n!=-1){
+					c[n].x=td[j].center_x;
+					c[n].y=td[j].center_y;
+					c[n].HP=100;
+					c[n].tag=1;
+				}
+	//			drawBOOM(td[j].center_x,td[j].center_y);
+			
+			}
+		}
+	
+	} 
+	
+	//爆炸
+	int n;
+	for(n=0;n<10;n++)
+		if(c[n].HP!=0) {
+			c[n].HP--;drawBOOM(c[n].x,c[n].y);
+			if(c[n].tag==1){
+				HP-=5;c[n].tag=0;
+			}
+		}
+	 
+			 
+}
+
+void Drawpao(int x,int y)
+{
+	setPenColor(RGB(30,30,30));
+	if(load==120) {
+		setPenColor(RGB(220,20,60));
+		char text[20];
+ 		setTextSize(20); 
+		sprintf(text,"过热！！");
+ 		paintText(230,605,text);
+	}
+	else if(load>=100) setPenColor(RGB(128,0,0));
+	setPenWidth(5);
+	setPenStyle(PEN_STYLE_SOLID);
+	int paox=x,paoy=y;
+	line(115,605,paox,paoy);
+	line(115-2,605-2,paox-2,paoy-2);
+	//蓄力 
+	if(tag1){
+		if(tag2!=2){
+			
+			setPenWidth(1);
+			setPenColor(RGB(100,100,100));
+			setPenStyle(PEN_STYLE_DOT);
+		}	
+		if(tag2==2){		
+			pMoving=1; 
+			setPenWidth(1);
+			setPenColor(MAGENTA);
+			setPenStyle(PEN_STYLE_SOLID);
+		} 
+	
+		if(x!=115&&y!=605){
+				int y_1=0,x_1=(int)(115+605/tan(rad*val));
+				line(x,y,x_1,y_1);
+		}
+		else if(x==115) line(x,y,x,0);
+		else line(x,y,1200,y);
+	}
+
+}
+
+void drawboat(boat* s)
+{
+ 	int i;
+ 	for(i=0;i<5;i++){
+ 		if(s[i].HP>0){
+ 			int x=s[i].center_x,y=s[i].center_y;
+ 			int size=s[i].b_rad;
+			 //ellipse(x-size,y-size,x+size,y+size);
+			
+			setBrushStyle(BRUSH_STYLE_SOLID); 
+			if(s[i].lv==3) {
+				int t=2*size-5; 
+				setBrushColor(GREEN);
+				setPenStyle(PEN_STYLE_NULL);
+				int l;
+				for(l=0;l<s[i].HP;l++){
+					rectangle(x-size+10+l*11,y-size-10,x-size+20+l*11,y-size-2);
+				}
+				
+				setPenColor(BLACK);
+				setPenWidth(1);
+				setBrushColor(EMPTY);
+				rectangle(x-size+10,y-size-10,x+size+5,y-size-2); 	
+			}
+			setPenWidth(12);
+			setPenColor(RGB(100,100,100));
+			if(s[i].lv==3) setPenColor(RGB(197,186,34));	
+			
+			line(x+size,y-15,x+size+10,y-size+5);
+			line(x+size+10,y-size+5,x+size+18,y-size+5);
+			line(x+size,y-9,x+size+10,y+size-29);
+			line(x+size+10,y+size-29,x+size+18,y+size-29);
+			setPenWidth(2);
+			setPenStyle(PEN_STYLE_NULL);
+			setPenColor(EMPTY);
+			setBrushColor(RGB(100,100,100));
+			if(s[i].lv==3) setBrushColor(RGB(197,186,34));
+			setBrushStyle(BRUSH_STYLE_SOLID); 
+			rectangle(x+size-4,y-20,x+size+16,y-3);			
+			ellipse(x-size,y-size,x+size,y+size-20);
+			setPenColor(RGB(100,100,100));
+			if(s[i].lv==3) setPenColor(RGB(197,186,34));
+			rectangle(x+2,y+size-25,x+15,y+size-15);	
+		}
+		else s[i].HP=0;
+	} 	
+}
+
+void Judge()
+{
+	int xiuzheng=10; 
+	int pao,ting;
+	for(pao=0;pao<10;pao++)
+	if(a[pao].HP!=0)
+	for(ting=0;ting<5;ting++)
+	if(s[ting].HP!=0){
+		int	d=(a[pao].center_x-s[ting].center_x)*(a[pao].center_x-s[ting].center_x)+
+		(a[pao].center_y-s[ting].center_y+xiuzheng)*(a[pao].center_y-s[ting].center_y+xiuzheng);
+		if(a[pao].lv==2) d*=1.1;
+		if(d<35*35){
+			a[pao].HP--;s[ting].HP--;
+			if(a[pao].lv==2) score+=20;
+			if(a[pao].lv==2&&s[ting].HP) s[ting].HP-=2;
+			if(s[ting].lv==2) score+=50;
+			else if(s[ting].lv==3) score+=300;
+			else score+=20;
+			if(s[ting].HP==0){
+				int n=searchBOOM(c);
+				if(n!=-1){
+					c[n].x=s[ting].center_x;
+					c[n].y=s[ting].center_y;
+					c[n].HP=100;
+				}
+			}
+		}
+	}
+	for(pao=0;pao<10;pao++)
+	if(a[pao].HP!=0)
+	for(ting=0;ting<5;ting++)
+	if(t[ting].HP!=0){
+		int	d=(a[pao].center_x-t[ting].center_x)*(a[pao].center_x-t[ting].center_x)+
+		(a[pao].center_y-t[ting].center_y)*(a[pao].center_y-t[ting].center_y);
+		if(a[pao].lv==2) d*=1.2;
+		if(d<25*25){
+			a[pao].HP--;t[ting].HP--;
+			score+=100;
+			int n=searchBOOM(c);
+			if(n!=-1){
+				c[n].x=t[ting].center_x;
+				c[n].y=t[ting].center_y;
+				c[n].HP=100;
+			}
+		}
+	}
+	if(HP<0) {
+		cancelTimer(0);
+		cancelTimer(1);
+		cancelTimer(2);
+		cancelTimer(3);
+		cancelTimer(4);
+		cancelTimer(5);
+		cancelTimer(6);
+		cancelTimer(7);
+		Draw();
+	}
+}
+
+void drawBOOM(int x,int y)
+{
+	
+	setPenColor(EMPTY);
+	setBrushStyle(BRUSH_STYLE_SOLID); 
+	setBrushColor(RGB(255,160,122)); 
+	
+	POINT s1[8]={
+	{x-50,y},{x-15,y-15},{x,y-50},{x+20,y-15},
+	{x+50,y},{x+15,y+15},{x,y+50},{x-15,y+15},
+	};
+	POINT s2[8]={
+	{x-20,y},{x-50,y-50},{x,y-20},{x+40,y-40},
+	{x+20,y},{x+50,y+50},{x,y+20},{x-30,y+50},
+	};
+	
+	polygon(s1,8);
+	polygon(s2,8);
+}
