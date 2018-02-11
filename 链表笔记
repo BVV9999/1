@@ -1,0 +1,115 @@
+#include<stdio.h>
+#include<stdlib.h> 
+
+typedef struct _node{
+	int value;
+	struct _node* next;
+}Node;
+
+typedef struct{
+	Node* head;
+	Node* tail;
+}List;
+
+void add(List* pList ,int number);
+//顺序加入一个数据 
+void print(List* pList);
+//将链表全部输出 
+void search(List* pList ,int number);
+//在链表中寻找一个数据 
+void deleteL(List* pList ,int number);
+//删除链表中的一个数据 
+void clear(List* pList);
+//释放链表空间 
+
+int main()
+{	 	
+	List list;
+	int number;
+	list.head = list.tail = NULL;
+	
+	do{
+		scanf("%d",&number);
+		if( number != -1 ){
+			add(&list,number);
+		}
+	}while ( number != -1 );
+	
+	print(&list);
+	
+	int a;
+	scanf("%d",&a);
+	
+	search(&list,a);
+	deleteL(&list,a);
+	print(&list);
+	clear(&list);
+	
+	return 0;
+}
+
+void add(List* pList ,int number)
+{
+	Node* p=(Node*)malloc(sizeof(Node));
+	p->value=number;
+	p->next=NULL;
+	
+	if(!pList->head){
+		pList->head=pList->tail=p;
+	}else{
+		pList->tail->next=p;
+		pList->tail=p;
+	}	
+}
+
+void print(List* pList)
+{
+	Node *p=NULL;
+	for(p=pList->head; p; p=p->next){
+		printf("%d ",p->value);
+	}
+	printf("\n"); 
+}
+
+void search(List* pList ,int number)
+{
+	Node *p=NULL;
+	int isFound=0;
+	for(p=pList->head; p; p=p->next){
+		if(p->value == number){
+			printf("找到了\n");
+			isFound=1;
+			break;
+		}
+	}
+	if(!isFound){
+		printf("没找到\n");
+	}
+}
+
+void deleteL(List* pList ,int number)
+{
+	Node *p=NULL,*q;
+
+	if(pList->head->value==number){
+		free(pList->head);
+	}else{
+		for(q=NULL,p=pList->head; p; q=p,p=p->next){
+			if(p->value == number){
+				q->next=p->next;
+				free(p);	
+				break;
+			}
+		}
+	}
+}
+
+void clear(List* pList)
+{
+	Node *q=NULL,*p=NULL;
+	
+	for(p=pList->head ;p;p=q){
+		q=p->next;
+		free(p);
+	}
+}
